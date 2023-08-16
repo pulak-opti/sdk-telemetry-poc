@@ -1,32 +1,52 @@
 package metrics
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
+	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	otel_prom "go.opentelemetry.io/otel/exporters/prometheus"
+	api "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
+type MetricsOpts struct {
+	Name        string
+	Description string
+}
+
 type Registry interface {
-	GetCounter(prometheus.CounterOpts) (prometheus.Counter, error)
+	GetCounter(MetricsOpts) (api.Float64Counter, error)
 }
 
 type promRegistry struct {
-	metrics map[string]prometheus.Counter
+	metrics  map[string]api.Float64Counter
+	provider *metric.MeterProvider
 }
 
-func NewRegistry() Registry {
-	return &promRegistry{
-		metrics: make(map[string]prometheus.Counter),
+func NewRegistry() (Registry, error) {
+	prom, err := otel_prom.New()
+	if err != nil {
+		return nil, err
 	}
+	return &promRegistry{
+		metrics:  make(map[string]api.Float64Counter),
+		provider: metric.NewMeterProvider(metric.WithReader(prom)),
+	}, nil
 }
 
-func (r *promRegistry) GetCounter(opts prometheus.CounterOpts) (prometheus.Counter, error) {
+func (r *promRegistry) GetCounter(opts MetricsOpts) (api.Float64Counter, error) {
 	val, found := r.metrics[opts.Name]
 	if found {
 		return val, nil
 	}
-	cv := prometheus.NewCounter(opts)
-	if err := prometheus.Register(cv); err != nil {
-		return nil, err
+
+	meter := r.provider.Meter("optimizely-go-sdk")
+
+	return meter.Float64Counter(opts.Name, api.WithDescription(opts.Description))
+}
+
+func GetPrometheusHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		promhttp.Handler().ServeHTTP(w, r)
 	}
-	r.metrics[opts.Name] = cv
-	return cv, nil
 }

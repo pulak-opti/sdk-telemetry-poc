@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/pulak-opti/sdk-telemetry-poc/client"
 	"github.com/pulak-opti/sdk-telemetry-poc/metrics"
 )
@@ -24,8 +23,12 @@ func activate(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	r := chi.NewRouter()
-	metricsReg = metrics.NewRegistry()
-	r.Get("/metrics", promhttp.Handler().ServeHTTP)
+	var err error
+	metricsReg, err = metrics.NewRegistry()
+	if err != nil {
+		panic(err)
+	}
+	r.Get("/metrics", metrics.GetPrometheusHandler())
 	r.Get("/activate", activate)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {

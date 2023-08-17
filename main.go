@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	r.Get("/metrics", metrics.GetPrometheusHandler())
+	r.Get("/metrics", metrics.GetPrometheusHandler().ServeHTTP)
 	r.Get("/activate", activate)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
